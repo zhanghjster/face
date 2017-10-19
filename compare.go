@@ -44,6 +44,13 @@ type CompareResult struct {
 	PairVerifyResult     int     `json:"pair_verify_result"`
 }
 
+func init() {
+	// 设置default client的transport默认使用http1.1
+	http.DefaultClient.Transport = &http.Transport{
+		TLSNextProto: make(map[string]func(authority string, c *tls.Conn) http.RoundTripper),
+	}
+}
+
 func NewCompare(id, secret string) *Compare {
 	return &Compare{
 		AccessKeyId:      id,
@@ -86,14 +93,7 @@ func (v *Compare) Do(first, second []byte) (*CompareResult, error) {
 	urlValues.Set("first_image_content", base64.StdEncoding.EncodeToString(first))
 	urlValues.Set("second_image_content", base64.StdEncoding.EncodeToString(second))
 
-	// http1.1
-	c := http.Client{
-		Transport: &http.Transport{
-			TLSNextProto: make(map[string]func(authority string, c *tls.Conn) http.RoundTripper),
-		},
-	}
-
-	res, err := c.PostForm(API, urlValues)
+	res, err := http.DefaultClient.PostForm(API, urlValues)
 	if res != nil {
 		defer res.Body.Close()
 		var ret = map[string]struct {
