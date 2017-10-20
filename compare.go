@@ -99,13 +99,11 @@ func (v *Compare) Do(first, second []byte) (*CompareResult, error) {
 	urlValues.Set("second_image_content", base64.StdEncoding.EncodeToString(second))
 
 	res, err := http.PostForm(Api, urlValues)
-	if res != nil {
-		defer res.Body.Close()
-	}
-
 	if err != nil {
 		return nil, err
 	}
+
+	defer res.Body.Close()
 
 	var ret = map[string]struct {
 		Code int
