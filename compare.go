@@ -98,7 +98,7 @@ func (v *Compare) Do(first, second []byte) (*CompareResult, error) {
 	urlValues.Set("first_image_content", base64.StdEncoding.EncodeToString(first))
 	urlValues.Set("second_image_content", base64.StdEncoding.EncodeToString(second))
 
-	res, err := http.DefaultClient.PostForm(Api, urlValues)
+	res, err := http.PostForm(Api, urlValues)
 	if res != nil {
 		defer res.Body.Close()
 	}
