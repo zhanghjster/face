@@ -1,6 +1,7 @@
 package face
 
 import (
+	"bytes"
 	"crypto/hmac"
 	"crypto/sha256"
 	"crypto/tls"
@@ -9,28 +10,30 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
-	"strings"
 	"time"
 )
 
 var (
-	API_HOST   = "mosapi.meituan.com"
-	API_PATH   = "/mcs/v1"
-	API        = "https://" + API_HOST + API_PATH
-	Action     = "PairVerifyFace"
+	Api       = "https://mosapi.meituan.com/mcs/v1"
+	ApiUrl, _ = url.Parse(Api)
+
 	TimeFormat = "2006-01-02T15:04:05.000Z0700"
+	RetCodeSuc = 200
 
 	DefaultSigVersion = "2"
 	DefaultSigMethod  = "HmacSHA256"
 	DefaultNegRate    = "99.9"
 	DefaultFormat     = "json"
+)
 
-	Suc = 200
+var (
+	CompareAction  = "PairVerifyFace"
+	CompareSignPre = http.MethodPost + "\n" + ApiUrl.Host + "\n" + ApiUrl.Path + "\n"
 )
 
 type Compare struct {
+	AccessKeySecret  []byte
 	AccessKeyId      string
-	AccessKeySecret  string
 	Format           string
 	SignatureVersion string
 	SignatureMethod  string
@@ -41,7 +44,7 @@ type CompareResult struct {
 	// 相同的比例
 	PairVerifySimilarity float64 `json:"pair_verify_similarity"`
 	// 0 表示相同，1表示不同
-	PairVerifyResult     int     `json:"pair_verify_result"`
+	PairVerifyResult int `json:"pair_verify_result"`
 }
 
 func init() {
@@ -54,7 +57,7 @@ func init() {
 func NewCompare(id, secret string) *Compare {
 	return &Compare{
 		AccessKeyId:      id,
-		AccessKeySecret:  secret,
+		AccessKeySecret:  []byte(secret),
 		SignatureVersion: DefaultSigVersion,
 		SignatureMethod:  DefaultSigMethod,
 		NegRate:          DefaultNegRate,
@@ -66,7 +69,7 @@ func NewCompare(id, secret string) *Compare {
 func (v *Compare) Do(first, second []byte) (*CompareResult, error) {
 	var paramPairs = []string{
 		"AWSAccessKeyId", v.AccessKeyId,
-		"Action", Action,
+		"Action", CompareAction,
 		"Format", v.Format,
 		"SignatureMethod", v.SignatureMethod,
 		"SignatureVersion", v.SignatureVersion,
@@ -75,25 +78,27 @@ func (v *Compare) Do(first, second []byte) (*CompareResult, error) {
 	}
 
 	var urlValues = make(url.Values)
-	var paramEncoded []string
+	var buf bytes.Buffer
+	buf.WriteString(CompareSignPre)
 	for i := 0; i < len(paramPairs); i += 2 {
-		paramEncoded = append(paramEncoded, paramPairs[i]+"="+url.QueryEscape(paramPairs[i+1]))
+		if i > 0 {
+			buf.WriteByte('&')
+		}
+		buf.WriteString(url.QueryEscape(paramPairs[i]))
+		buf.WriteByte('=')
+		buf.WriteString(url.QueryEscape(paramPairs[i+1]))
 		urlValues.Set(paramPairs[i], paramPairs[i+1])
 	}
 
 	// 签名
-	var h = hmac.New(sha256.New, []byte(v.AccessKeySecret))
-	h.Write([]byte(
-		strings.Join([]string{
-			"POST", API_HOST, API_PATH, strings.Join(paramEncoded, "&"),
-		}, "\n"),
-	))
+	var h = hmac.New(sha256.New, v.AccessKeySecret)
+	h.Write(buf.Bytes())
 
 	urlValues.Set("Signature", base64.StdEncoding.EncodeToString(h.Sum(nil)))
 	urlValues.Set("first_image_content", base64.StdEncoding.EncodeToString(first))
 	urlValues.Set("second_image_content", base64.StdEncoding.EncodeToString(second))
 
-	res, err := http.DefaultClient.PostForm(API, urlValues)
+	res, err := http.DefaultClient.PostForm(Api, urlValues)
 	if res != nil {
 		defer res.Body.Close()
 	}
@@ -112,7 +117,7 @@ func (v *Compare) Do(first, second []byte) (*CompareResult, error) {
 	}
 
 	result := ret["PairVerifyFaceResponse"]
-	if result.Code != Suc {
+	if result.Code != RetCodeSuc {
 		return nil, errors.New(result.Err)
 	}
 
