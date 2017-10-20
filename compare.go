@@ -96,22 +96,25 @@ func (v *Compare) Do(first, second []byte) (*CompareResult, error) {
 	res, err := c.PostForm(API, urlValues)
 	if res != nil {
 		defer res.Body.Close()
-		var ret = map[string]struct {
-			Code int
-			Err  string
-			Ret  CompareResult
-		}{}
-		if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
-			return nil, err
-		}
-
-		result := ret["PairVerifyFaceResponse"]
-		if result.Code != Suc {
-			return nil, errors.New(result.Err)
-		}
-
-		return &result.Ret, nil
 	}
 
-	return nil, err
+	if err != nil {
+		return nil, err
+	}
+
+	var ret = map[string]struct {
+		Code int
+		Err  string
+		Ret  CompareResult
+	}{}
+	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+		return nil, err
+	}
+
+	result := ret["PairVerifyFaceResponse"]
+	if result.Code != Suc {
+		return nil, errors.New(result.Err)
+	}
+
+	return &result.Ret, nil
 }
